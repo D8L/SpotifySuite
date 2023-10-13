@@ -2,7 +2,7 @@ import os
 from dotenv import load_dotenv
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
-import time
+import textwrap
 
 load_dotenv()
 spotify_client_id = os.environ['SPOTIPY_CLIENT_ID']
@@ -30,9 +30,14 @@ Input 1 or 2 to select an option:
                     chosen_playlist, playlist_length, chosen_id = choose_playlists(playlist_return)
                     playlist_results = get_playlist_items(sp, playlist_length, chosen_id)
 
+                    print("Sorting genre information...")
+
                     unique_tracks = set()
                     songs_by_genre = {}
                     artist_cache = {}
+                    artist_ids = set()
+
+                    # collect all artist IDs from the playlist results
                     for track in playlist_results:
                         track_uri = track['track']['uri']
                         if track_uri not in unique_tracks:
@@ -40,40 +45,55 @@ Input 1 or 2 to select an option:
                             primary_artist = track['track']['artists'][0]
                             artist_id = primary_artist['id']
                             if artist_id is not None:
-                                if artist_id in artist_cache:
-                                    artist_info = artist_cache[artist_id]
-                                else:
-                                        time.sleep(0.1)
-                                        artist_info = sp.artist(artist_id=artist_id)
+                                artist_ids.add(artist_id)
 
-                                artist_cache[artist_id] = artist_info
-                                print("Sorting genre information...")
-                                artist_genres = artist_info['genres']
-                                for genre in artist_genres:
-                                    if genre not in songs_by_genre:
-                                        songs_by_genre[genre] = []
-                                    songs_by_genre[genre].append(track)
+                    # fetch artist information for all unique artist IDs
+                    batch_size = 50
+                    artist_ids = list(artist_ids)  # set to a list - just in case!
 
-                    print("Genre choices:")
-                    for genre in songs_by_genre.keys():
-                        print("\t" + genre)
-                    genre_search = input("What genre do you want: ")
+                    for i in range(0, len(artist_ids), batch_size):
+                        batch_ids = artist_ids[i:i + batch_size]
+
+                        # make a batch request to the API to fetch artist information for all unique IDs in the batch
+                        batch_artist_info = sp.artists(artists=batch_ids)
+
+                        # update the artist_cache with the fetched information
+                        for artist_info in batch_artist_info['artists']:
+                            artist_id = artist_info['id']
+                            artist_cache[artist_id] = artist_info
+
+                    # process the tracks with the artist information
+                    for track in playlist_results:
+                        primary_artist = track['track']['artists'][0]
+                        artist_id = primary_artist['id']
+
+                        if artist_id in artist_cache:
+                            artist_info = artist_cache[artist_id]
+                            artist_genres = artist_info['genres']
+
+                            for genre in artist_genres:
+                                if genre not in songs_by_genre:
+                                    songs_by_genre[genre] = []
+                                songs_by_genre[genre].append(track)
+
+                    print_genres(songs_by_genre)
+
+                    genre_choice = input("What genres do you want to sort? Separate each with a comma and a space: ")
+                    genre_search = genre_choice.split(', ')
                     playlist_name = name_playlist()
                     playlist_visibility = get_playlist_visibility()
                     playlist = sp.user_playlist_create(sp.me()['id'], playlist_name, (playlist_visibility == 1), False,
                                                        "")
                     playlist_id = playlist['id']
                     matching_tracks = []
-                    if genre_search in songs_by_genre:
-                        matching_tracks = songs_by_genre[genre_search]
+                    for genres in genre_search:
+                        if genres in songs_by_genre:
+                            matching_tracks.extend(songs_by_genre[genres])
+
                     total_tracks = len(matching_tracks)
                     for i in range(0, total_tracks, 100):
                         segment = matching_tracks[i:i + 100]
                         uris = [item['track']['uri'] for item in segment]
-                        sp.playlist_add_items(playlist_id, uris)
-                    if total_tracks % 100 != 0 and total_tracks > 100:
-                        remaining_segment = matching_tracks[total_tracks - (total_tracks % 100):]
-                        uris = [item['track']['uri'] for item in remaining_segment]
                         sp.playlist_add_items(playlist_id, uris)
                     print("\nPlaylist created!\n")
 
@@ -108,7 +128,8 @@ def authenticate_user():
             client_secret=spotify_client_secret,
             redirect_uri=spotify_redirect_url,
             scope=spotify_scope,
-            requests_timeout=2))
+            requests_timeout=2,
+            open_browser=True))
     return sp
 
 
@@ -203,7 +224,7 @@ def name_playlist():
     while True:
         option = input('''
 What would you like to name the playlist: ''')
-        if len(option) < 100:
+        if 100 > len(option) > 0:
             return option
         else:
             print("Error: Please enter a valid playlist name.")
@@ -231,6 +252,27 @@ def get_playlist_items(sp, playlist_length, chosen_id):
             playlist_results.append(item)
 
     return playlist_results
+
+def print_genres(songs_by_genre):
+    print("Genre choices:")
+    genres = sorted(songs_by_genre.keys())
+    num_columns = 4
+
+    # calculate the maximum width for each column
+    max_width = max(len(genre) for genre in genres)
+
+    # calculate the number of rows needed based on the number of columns
+    num_rows = (len(genres) + num_columns) // num_columns
+
+    # Iterate through the rows and columns
+    for row in range(num_rows):
+        for col in range(num_columns):
+            index = row + col * num_rows
+            if index < len(genres):
+                genre = genres[index]
+                # Use string formatting to ensure consistent column width
+                print("\t{:<{width}}".format(genre, width=max_width), end="\t")
+        print()  # Move to the next row
 
 
 def ascii():
