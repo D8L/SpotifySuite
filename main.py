@@ -2,6 +2,7 @@ import os
 from dotenv import load_dotenv
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
+import time
 
 load_dotenv()
 spotify_client_id = os.environ['SPOTIPY_CLIENT_ID']
@@ -12,7 +13,6 @@ spotify_scope = os.environ['SPOTIPY_SCOPE']
 
 def main():
     ascii()
-    sp = authenticate_user()
 
     while True:
         try:
@@ -22,6 +22,7 @@ Input 1 or 2 to select an option:
     2.) Put favorite tracks in a playlist''')
             input_choice = int(input('Choice: '))
             if input_choice in [1, 2]:
+                sp = authenticate_user()
                 if input_choice == 1:
 
                     # fetches information to proceed
@@ -29,24 +30,33 @@ Input 1 or 2 to select an option:
                     chosen_playlist, playlist_length, chosen_id = choose_playlists(playlist_return)
                     playlist_results = get_playlist_items(sp, playlist_length, chosen_id)
 
-                    unique_artists = set()
-                    unique_genres = set()
-                    print("Loading genres...")
+                    unique_tracks = set()
+                    songs_by_genre = {}
+                    artist_cache = {}
                     for track in playlist_results:
-                        for artist in track['track']['artists']:
-                            print(artist)
-                            artist_id = artist['id']
-                            print(artist_id)
+                        track_uri = track['track']['uri']
+                        if track_uri not in unique_tracks:
+                            unique_tracks.add(track_uri)
+                            primary_artist = track['track']['artists'][0]
+                            artist_id = primary_artist['id']
                             if artist_id is not None:
-                                if artist_id not in unique_artists:
-                                    unique_artists.add(artist_id)
-                                    artist_info = sp.artist(artist_id=artist_id)
-                                    artist_genres = artist_info['genres']
-                                    for genre in artist_genres:
-                                        unique_genres.add(genre)
+                                if artist_id in artist_cache:
+                                    artist_info = artist_cache[artist_id]
+                                else:
+                                        time.sleep(0.1)
+                                        artist_info = sp.artist(artist_id=artist_id)
+
+                                artist_cache[artist_id] = artist_info
+                                print("Sorting genre information...")
+                                artist_genres = artist_info['genres']
+                                for genre in artist_genres:
+                                    if genre not in songs_by_genre:
+                                        songs_by_genre[genre] = []
+                                    songs_by_genre[genre].append(track)
+
                     print("Genre choices:")
-                    for genre in unique_genres:
-                        print(genre)
+                    for genre in songs_by_genre.keys():
+                        print("\t" + genre)
                     genre_search = input("What genre do you want: ")
                     playlist_name = name_playlist()
                     playlist_visibility = get_playlist_visibility()
@@ -54,28 +64,18 @@ Input 1 or 2 to select an option:
                                                        "")
                     playlist_id = playlist['id']
                     matching_tracks = []
-                    unique_track_uris = set()
-                    for track in playlist_results:
-                        artist_genres = set()
-                        unique_track = track['track']['uri']
-                        for artist in track['track']['artists']:
-                            artist_id = artist['id']
-                            if artist_id is not None:
-                                artist_info = sp.artist(artist_id=artist_id)
-                                if 'genres' in artist_info:
-                                    artist_genres.update(artist_info['genres'])
-                        if genre_search in artist_genres and unique_track not in unique_track_uris:
-                            print(unique_track)
-                            matching_tracks.append(unique_track)
-                            unique_track_uris.add(unique_track)
+                    if genre_search in songs_by_genre:
+                        matching_tracks = songs_by_genre[genre_search]
                     total_tracks = len(matching_tracks)
                     for i in range(0, total_tracks, 100):
                         segment = matching_tracks[i:i + 100]
-                        sp.playlist_add_items(playlist_id, segment)
+                        uris = [item['track']['uri'] for item in segment]
+                        sp.playlist_add_items(playlist_id, uris)
                     if total_tracks % 100 != 0 and total_tracks > 100:
                         remaining_segment = matching_tracks[total_tracks - (total_tracks % 100):]
-                        sp.playlist_add_items(playlist_id, remaining_segment)
-                    print("Playlist created!")
+                        uris = [item['track']['uri'] for item in remaining_segment]
+                        sp.playlist_add_items(playlist_id, uris)
+                    print("\nPlaylist created!\n")
 
                 elif input_choice == 2:
 
@@ -107,7 +107,8 @@ def authenticate_user():
             client_id=spotify_client_id,
             client_secret=spotify_client_secret,
             redirect_uri=spotify_redirect_url,
-            scope=spotify_scope))
+            scope=spotify_scope,
+            requests_timeout=2))
     return sp
 
 
@@ -210,24 +211,25 @@ What would you like to name the playlist: ''')
 
 def choose_playlists(playlist_return):
     print('''
-    Input the number associated with the playlist you want to sort:''')
+Input the number associated with the playlist you want to sort:''')
     for index, playlist in enumerate(playlist_return['items'], start=1):
-        print(f"{index}.) {playlist['name']}")
+        print(f"\t{index}.) {playlist['name']}")
     chosen_playlist = playlist_return['items'][(int(input('Choice: ')) - 1)]
     print()
     playlist_length = chosen_playlist['tracks']['total']
     chosen_id = chosen_playlist['id']
     return chosen_playlist, playlist_length, chosen_id
 
+
 def get_playlist_items(sp, playlist_length, chosen_id):
     playlist_results = []
-    print(f"Extracting data from {playlist_length} songs...")
+    print(f"Extracting genres from {playlist_length} songs...")
     for i in range(0, playlist_length, 100):
-        print("Batch processing...")
         playlist_batch = sp.playlist_items(chosen_id, limit=100, offset=i, market=None,
-                                           additional_types=['track'])
+                                           additional_types=['track'],)
         for item in playlist_batch['items']:
             playlist_results.append(item)
+
     return playlist_results
 
 
