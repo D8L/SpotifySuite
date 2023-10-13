@@ -119,11 +119,13 @@ def fetch_playlist_id(sp, playlist_name):
             return playlist['id']
 
 
-def get_top_tracks(sp, song_limit, song_range):
-    return sp.current_user_top_tracks(song_limit, 0, song_range)
+def get_top_tracks(sp, limit, range):
+    # Takes in the user, limit, and range outputs top tracks according to those parameters
+    return sp.current_user_top_tracks(limit, 0, range)
 
 
 def get_limit():
+    # Returns the number of songs (1-50) that should be pulled out
     while True:
         try:
             limit = int(input('''
@@ -137,6 +139,7 @@ How many of your favorite songs would you like to pull? (1-50): '''))
 
 
 def get_range():
+    # Gets the time period user wants to pull favorite songs from
     while True:
         try:
             print('''
