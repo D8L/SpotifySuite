@@ -1,6 +1,6 @@
 # SpotifySuite
 
-A lightweight, terminal-based program to sort and pull your Spotify information by utilizing their API.
+A lightweight, terminal-based program to sort your favorite tracks and genres on Spotify by utilizing their API.
 
 ## Getting Started
 
