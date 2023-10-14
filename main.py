@@ -8,7 +8,8 @@ load_dotenv()
 spotify_client_id = os.environ['SPOTIPY_CLIENT_ID']
 spotify_client_secret = os.environ['SPOTIPY_CLIENT_SECRET']
 spotify_redirect_url = os.environ['SPOTIPY_REDIRECT_URI']
-spotify_scope = os.environ['SPOTIPY_SCOPE']
+# case by case
+spotify_scope = 'user-library-read, user-library-modify, playlist-modify-private, playlist-modify-public, user-top-read'
 
 
 def main():
