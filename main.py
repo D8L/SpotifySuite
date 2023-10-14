@@ -13,7 +13,7 @@ spotify_scope = 'user-library-read, user-library-modify, playlist-modify-private
 
 
 def main():
-    # print ASCII art and start the main loop
+    # print ASCII art and start main loop
     ascii_print()
     while True:
         try:
