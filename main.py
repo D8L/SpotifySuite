@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 
-# Load environment variables
+# load environment variables
 load_dotenv()
 spotify_client_id = os.environ['SPOTIPY_CLIENT_ID']
 spotify_client_secret = os.environ['SPOTIPY_CLIENT_SECRET']
@@ -13,7 +13,7 @@ spotify_scope = os.environ['SPOTIPY_SCOPE']
 
 def main():
     # print ASCII art and start the main loop
-    ascii()
+    ascii_print()
     while True:
         try:
             print('''
@@ -32,22 +32,17 @@ Input 1 or 2 to select an option:
                     playlist_results = get_playlist_items(sp, playlist_length, chosen_id)
 
                     # sort tracks by genre
-                    print("Sorting genre information...")
                     unique_tracks, songs_by_genre, artist_cache, artist_ids = process_playlist_data(playlist_results,
                                                                                                     sp)
-                    print_genres(songs_by_genre)
-
                     # create a new playlist based on selected genres
-                    playlist_name, playlist_visibility = get_playlist_details()
-                    create_playlist_and_add_by_genre(sp, songs_by_genre, playlist_name,
-                                                     playlist_visibility)
+                    print_genres(songs_by_genre)
+                    create_playlist_and_add_by_genre(sp, songs_by_genre)
 
                 elif input_choice == 2:
                     # create a playlist of favorite tracks
                     song_limit, song_range = get_limit(), get_range()
                     top_tracks = sp.current_user_top_tracks(limit=song_limit, time_range=song_range)
-                    playlist_name, playlist_visibility = get_playlist_details()
-                    create_playlist_and_add_by_favorites(sp, top_tracks, playlist_name, playlist_visibility)
+                    create_playlist_and_add_by_favorites(sp, top_tracks)
 
             else:
                 print("Error: Please enter the numbers 1 or 2.")
@@ -112,7 +107,7 @@ def process_playlist_data(playlist_results, sp):
             for genre in artist_genres:
                 if genre not in songs_by_genre:
                     songs_by_genre[genre] = []
-                songs_by_genre[genre].append(track)
+                songs_by_genre[genre].append(track['track']['uri'])  # - important - come back to this!
 
     return unique_tracks, songs_by_genre, artist_cache, artist_ids
 
@@ -124,28 +119,35 @@ def get_playlist_details():
     return playlist_name, playlist_visibility
 
 
-def create_playlist_and_add_by_genre(sp, songs_by_genre, playlist_name, playlist_visibility):
-    genre_choice = input("What genres do you want to sort? Separate each with a comma and a space: ")
+def create_playlist_and_add_by_genre(sp, songs_by_genre):
+    genre_choice = input('''
+Separate each genre you want to sort with a comma and a space
+(e.g., rap, synthpop, jazz, new wave, chicago blues): ''')
+    playlist_name, playlist_visibility = get_playlist_details()
+
     # create a new playlist based on selected genres above and add tracks to it
     playlist = sp.user_playlist_create(sp.me()['id'], playlist_name, (playlist_visibility == 1), False, "")
     playlist_id = playlist['id']
     matching_tracks = []
 
-    for genres in genre_choice.split(', '):
-        if genres in songs_by_genre:
-            matching_tracks.extend(songs_by_genre[genres])
+    selected_genres = genre_choice.lower().split(', ')
+    for genre in selected_genres:
+        if genre in songs_by_genre:
+            matching_tracks.extend(songs_by_genre[genre])
 
-    total_tracks = len(matching_tracks)
+    unique_tracks = list(set(matching_tracks))
+    total_tracks = len(unique_tracks)
 
     for i in range(0, total_tracks, 100):
-        segment = matching_tracks[i:i + 100]
-        uris = [item['track']['uri'] for item in segment]
-        sp.playlist_add_items(playlist_id, uris)
+        segment = unique_tracks[i:i + 100]
+        print(segment)
+        sp.playlist_add_items(playlist_id, segment)
 
     print("\nPlaylist created!\n")
 
 
-def create_playlist_and_add_by_favorites(sp, top_tracks, playlist_name, playlist_visibility):
+def create_playlist_and_add_by_favorites(sp, top_tracks):
+    playlist_name, playlist_visibility = get_playlist_details()
     playlist = sp.user_playlist_create(sp.me()['id'], playlist_name, (playlist_visibility == 1), False, "")
     playlist_id = playlist['id']
     track_uris = [item['uri'] for item in top_tracks.get('items', [])]
@@ -261,7 +263,7 @@ def print_genres(songs_by_genre):
         print()  # move to the next row
 
 
-def ascii():
+def ascii_print():
     ascii_text = '''
        ____           __   _  ___          ____       _  __      
       / __/___  ___  / /_ (_)/ _/__ __    / __/__ __ (_)/ /_ ___ 
