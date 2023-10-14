@@ -124,13 +124,17 @@ def create_playlist_and_add_by_genre(sp, songs_by_genre):
 Separate each genre you want to sort with a comma and a space
 (e.g., rap, synthpop, jazz, new wave, chicago blues): ''')
     playlist_name, playlist_visibility = get_playlist_details()
+    selected_genres = genre_choice.lower().split(', ')
+
+    separator = ', '
+    result_string = separator.join(selected_genres)
 
     # create a new playlist based on selected genres above and add tracks to it
-    playlist = sp.user_playlist_create(sp.me()['id'], playlist_name, (playlist_visibility == 1), False, "")
+    playlist = sp.user_playlist_create(sp.me()['id'], playlist_name, (playlist_visibility == 1), False,
+                                       description=result_string)
     playlist_id = playlist['id']
     matching_tracks = []
 
-    selected_genres = genre_choice.lower().split(', ')
     for genre in selected_genres:
         if genre in songs_by_genre:
             matching_tracks.extend(songs_by_genre[genre])
@@ -140,7 +144,6 @@ Separate each genre you want to sort with a comma and a space
 
     for i in range(0, total_tracks, 100):
         segment = unique_tracks[i:i + 100]
-        print(segment)
         sp.playlist_add_items(playlist_id, segment)
 
     print("\nPlaylist created!\n")
